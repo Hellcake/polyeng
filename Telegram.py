@@ -2,8 +2,8 @@ import random
 import telebot
 from telebot import types
 import sqlite3
-
-bot = telebot.TeleBot("6697328507:AAFMTwmhcGDEVHd3WGPr8MsG73W6CxLsr4U")
+import os
+bot = telebot.TeleBot(os.environ.get("TELEGRAM_BOT_API"))
 
 conn = sqlite3.connect('db/database.db', check_same_thread=False)
 cursor = conn.cursor()
