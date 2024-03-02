@@ -13,10 +13,10 @@ permissions:
   contents: read
 
 jobs:
-  build:
-
+  deployment:
     runs-on: ubuntu-latest
-
+    environment: 
+      name: Python enviroment
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python 3.12
