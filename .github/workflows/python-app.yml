@@ -13,10 +13,12 @@ permissions:
   contents: read
 
 jobs:
-  build:
-
+  deployment:
     runs-on: ubuntu-latest
-
+    environment: 
+      name: Python enviroment
+    env: 
+      TELEGRAM_BOT_API: ${{ secrets.TELEGRAM_BOT_API }}
     steps:
     - uses: actions/checkout@v3
     - name: Set up Python 3.12
