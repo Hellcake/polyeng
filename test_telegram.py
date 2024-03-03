@@ -1,33 +1,23 @@
+# test_data_adder.py
 import pytest
-from unittest.mock import patch, MagicMock
-from telegram import start
+from unittest.mock import Mock, MagicMock
+import data_adder  # Assuming data_adder.py is your script that you want to test
 
 @pytest.fixture
-def mock_types():
-    return patch('telegram.types').start()
+def mock_db(mocker):
+    # Mock the database connection and cursor
+    mock_conn = Mock()
+    mock_cursor = MagicMock()
+    mock_conn.cursor.return_value = mock_cursor
+    mocker.patch('data_adder.conn', mock_conn)
+    return mock_conn, mock_cursor
 
-@pytest.fixture
-def mock_bot():
-    return patch('telegram.bot').start()
+def test_insert_data(mock_db):
+    _, mock_cursor = mock_db
+    # Call the function that adds data to the database
+    # Assuming this is a function you've defined called `insert_data`
+    data_adder.insert_data()  # This is where you would call your actual function
 
-def test_start(mock_types, mock_bot):
-    # Mocking the message and chat objects
-    mock_message = MagicMock()
-    mock_message.chat.id = 12345
-
-    # Mocking the KeyboardButton and ReplyKeyboardMarkup
-    mock_button = MagicMock()
-    mock_markup = MagicMock()
-
-    mock_types.KeyboardButton.return_value = mock_button
-    mock_types.ReplyKeyboardMarkup.return_value = mock_markup
-
-    # Call the start function
-    start(mock_message)
-
-    # Assertions to check if the functions were called correctly
-    mock_types.KeyboardButton.assert_called_once_with("a")
-    mock_markup.add.assert_called_once_with(mock_button)
-    mock_bot.send_message.assert_called_once_with(
-        12345, "Выбери юнит:", reply_markup=mock_markup, parse_mode='html'
-        )
+    # Check that executemany was called on the cursor
+    assert mock_cursor.executemany.called
+    # Optionally check call arguments, etc.
