@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  deployment:
+  build:
     runs-on: ubuntu-latest
     environment: 
       name: Python enviroment
