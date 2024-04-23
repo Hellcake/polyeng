@@ -5,6 +5,9 @@ import sqlite3
 import os
 import gtts
 from pydub import AudioSegment
+from dotenv import load_dotenv
+load_dotenv()
+
 bot = telebot.TeleBot(os.environ.get("TELEGRAM_BOT_API"))
 
 conn = sqlite3.connect('db/database.db', check_same_thread=False)
