@@ -23,6 +23,15 @@ def text_to_speech(text, language='en'):
     return filename
 
 
+def text_to_speech(text, language='en'):
+    tts = gtts.gTTS(text, lang=language)
+    filename = "output.mp3"  # You can change the filename
+    tts.save(filename)
+    return filename
+
+
+
+
 @bot.message_handler(commands=['start'])
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -253,7 +262,18 @@ def on_user_response(message):
                 else:
                     bot.send_message(message.from_user.id, f"Произошла ошибка😢, обратитесь к @lrawd3",
                                      parse_mode='html')
+
         
+
+
+        elif message.text.startswith("/tts"):  # Check if message starts with /tts command
+            english_text = message.text[5:]  # Extract the text after "/tts "
+            audio_filename = text_to_speech(english_text)
+            audio = open(audio_filename, 'rb')
+            bot.send_voice(message.chat.id, audio)
+            audio.close()
+            os.remove(audio_filename)  # Remove temporary audio file
+
         else:
             bot.send_message(message.from_user.id, f"Возникла ошибка\nПропиши /start",
                              parse_mode='html')
