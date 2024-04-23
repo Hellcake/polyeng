@@ -3,6 +3,8 @@ import telebot
 from telebot import types
 import sqlite3
 import os
+import gtts
+from pydub import AudioSegment
 bot = telebot.TeleBot(os.environ.get("TELEGRAM_BOT_API"))
 
 conn = sqlite3.connect('db/database.db', check_same_thread=False)
@@ -14,6 +16,12 @@ def handle_command(message):
     result = cursor.fetchone()
     return result
 
+def text_to_speech(text, language='en'):
+    tts = gtts.gTTS(text, lang=language)
+    filename = "output.mp3"  # You can change the filename
+    tts.save(filename)
+    return filename
+
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -23,7 +31,19 @@ def start(message):
 
     bot.send_message(message.chat.id, "Выбери юнит:", reply_markup=markup, parse_mode='html')
 
+@bot.message_handler(commands=['tts'])
+def handle_tts_command(message):
+    bot.send_message(message.chat.id, "Please send the text you want me to convert to speech:")
+    bot.register_next_step_handler(message, process_text_to_speech)
 
+def process_text_to_speech(message):
+    english_text = message.text
+    audio_filename = text_to_speech(english_text)
+    audio = open(audio_filename, 'rb')
+    bot.send_voice(message.chat.id, audio)
+    audio.close()
+    os.remove(audio_filename)  # Remove temporary audio file
+    
 @bot.message_handler(
     func=lambda message: message.text in ['a'])
 def choose_topic(message):
@@ -233,6 +253,7 @@ def on_user_response(message):
                 else:
                     bot.send_message(message.from_user.id, f"Произошла ошибка😢, обратитесь к @lrawd3",
                                      parse_mode='html')
+        
         else:
             bot.send_message(message.from_user.id, f"Возникла ошибка\nПропиши /start",
                              parse_mode='html')
