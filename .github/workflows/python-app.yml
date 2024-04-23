@@ -13,10 +13,6 @@ permissions:
   contents: read
 
 jobs:
-  deployment:
-    runs-on: ubuntu-latest
-    environment: 
-      name: Python enviroment
     env: 
       TELEGRAM_BOT_API: ${{ secrets.TELEGRAM_BOT_API }}
     steps:
