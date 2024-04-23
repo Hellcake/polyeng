@@ -4,8 +4,8 @@ from telebot import types
 import sqlite3
 import os
 import gtts
-from pydub import AudioSegment
 from dotenv import load_dotenv
+
 load_dotenv()
 
 bot = telebot.TeleBot(os.environ.get("TELEGRAM_BOT_API"))
@@ -18,6 +18,7 @@ def handle_command(message):
     cursor.execute("SELECT * FROM Users WHERE user_id=?", (message.from_user.id,))
     result = cursor.fetchone()
     return result
+
 
 def text_to_speech(text, language='en'):
     tts = gtts.gTTS(text, lang=language)
@@ -34,19 +35,15 @@ def start(message):
 
     bot.send_message(message.chat.id, "Выбери юнит:", reply_markup=markup, parse_mode='html')
 
-@bot.message_handler(commands=['tts'])
-def handle_tts_command(message):
-    bot.send_message(message.chat.id, "Please send the text you want me to convert to speech:")
-    bot.register_next_step_handler(message, process_text_to_speech)
 
-def process_text_to_speech(message):
-    english_text = message.text
-    audio_filename = text_to_speech(english_text)
+def process_text_to_speech(message, text):
+    audio_filename = text_to_speech(text)
     audio = open(audio_filename, 'rb')
     bot.send_voice(message.chat.id, audio)
     audio.close()
     os.remove(audio_filename)  # Remove temporary audio file
-    
+
+
 @bot.message_handler(
     func=lambda message: message.text in ['a'])
 def choose_topic(message):
@@ -84,6 +81,7 @@ def choose_mode(message):
     if not handle_command(message):
         start(message)
         return
+    mode = {'С английского': 'eng', 'С русского': 'ru'}.get(message.text)
 
     cursor.execute("""
                     SELECT last_topic
@@ -91,16 +89,9 @@ def choose_mode(message):
                     WHERE user_id = ?;
                 """, (message.from_user.id,))
     last_info = cursor.fetchone()
-    if message.text == 'С английского':
-        print(last_info[0])
-        cursor.execute("UPDATE Users SET mode = ? WHERE user_id = ?", ("eng", message.from_user.id))
-        conn.commit()
-        get_random_word_eng(message.from_user.id, last_info[0], message)
-
-    if message.text == 'С русского':
-        cursor.execute("UPDATE Users SET mode = ? WHERE user_id = ?", ("ru", message.from_user.id))
-        conn.commit()
-        get_random_word_ru(message.from_user.id, last_info[0], message)
+    cursor.execute("UPDATE Users SET mode = ? WHERE user_id = ?", (mode, message.from_user.id))
+    conn.commit()
+    get_random_word(message.from_user.id, last_info[0], message)
 
 
 def switch_case(argument):
@@ -111,19 +102,27 @@ def switch_case(argument):
     return switch_dict.get(argument, "Invalid case")
 
 
-def get_random_word_eng(user_id, topic_id, message):
+def get_random_word(user_id, topic_id, message):
     cursor.execute("""
-        SELECT Words.word, UserWords.usage_weight 
+        SELECT Words.word,Words.translation, UserWords.usage_weight
         FROM Words
         JOIN UserWords ON Words.word_id = UserWords.word_id
         WHERE Words.topic_id = ? AND UserWords.user_id = ?;
     """, (topic_id, user_id,))
 
     words_with_weights = cursor.fetchall()
-    print(words_with_weights)
+    cursor.execute("""
+                    SELECT mode
+                    FROM Users
+                    WHERE user_id = ?;
+                """, (message.from_user.id,))
+    last_info = cursor.fetchone()[0]
     if words_with_weights:
-        words, usage_weights = zip(*words_with_weights)
-        selected_word = random.choices(words, usage_weights)[0]
+        words, translation, usage_weights = zip(*words_with_weights)
+        if last_info == "eng":
+            selected_word = random.choices(words, usage_weights)[0]
+        else:
+            selected_word = random.choices(translation, usage_weights)[0]
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         but1 = types.KeyboardButton("Знаю")
         but2 = types.KeyboardButton("Не знаю")
@@ -134,32 +133,7 @@ def get_random_word_eng(user_id, topic_id, message):
         cursor.execute("UPDATE Users SET last_word = ? WHERE user_id = ? AND last_topic = ?",
                        (selected_word, user_id, topic_id))
         conn.commit()
-    else:
-        return None
-
-
-def get_random_word_ru(user_id, topic_id, message):
-    cursor.execute("""
-        SELECT Words.translation, UserWords.usage_weight 
-        FROM Words
-        JOIN UserWords ON Words.word_id = UserWords.word_id
-        WHERE Words.topic_id = ? AND UserWords.user_id = ?;
-    """, (topic_id, user_id,))
-
-    words_with_weights = cursor.fetchall()
-    if words_with_weights:
-        words, usage_weights = zip(*words_with_weights)
-        selected_word = random.choices(words, usage_weights)[0]
-        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        but1 = types.KeyboardButton("Знаю")
-        but2 = types.KeyboardButton("Не знаю")
-        markup.add(but1, but2)
-        but3 = types.KeyboardButton("Назад")
-        markup.add(but3)
-        bot.send_message(message.from_user.id, selected_word, reply_markup=markup, parse_mode='html')
-        cursor.execute("UPDATE Users SET last_word = ? WHERE user_id = ? AND last_topic = ?",
-                       (selected_word, user_id, topic_id))
-        conn.commit()
+        if last_info == "eng": process_text_to_speech(message, selected_word)
     else:
         return None
 
@@ -177,49 +151,14 @@ def on_user_response(message):
     last_info = cursor.fetchone()
 
     user_id = message.from_user.id
-
     if last_info[2] == "eng":
         cursor.execute("""
-            SELECT word_id, translation, weight
-            FROM Words
-            WHERE word = ?;
-        """, (last_info[0],))
+                    SELECT word_id, translation, weight
+                    FROM Words
+                    WHERE word = ?;
+                """, (last_info[0],))
         word_info = cursor.fetchone()
-
-        if word_info is not None:
-            cursor.execute("""
-                                SELECT usage_weight
-                                FROM UserWords
-                                WHERE word_id = ? AND user_id = ?;
-                            """, (word_info[0], user_id))
-            w = cursor.fetchone()
-
-            if message.text == 'Знаю':
-                if word_info and w:
-                    word, translation, weight = word_info
-                    bot.send_message(message.from_user.id, f"Напоминаю🤓:\n{translation}", parse_mode='html')
-                    usage_weight = w[0]
-                    usage_weight /= 1.5
-                    cursor.execute("UPDATE UserWords SET usage_weight = ? WHERE user_id = ? AND word_id = ?",
-                                   (usage_weight, user_id, word_info[0]))
-                    conn.commit()
-                    get_random_word_eng(user_id, last_info[1], message)
-                else:
-                    bot.send_message(message.from_user.id, f"Произошла ошибка😢, обратитесь к @lrawd3",
-                                     parse_mode='html')
-            if message.text == 'Не знаю':
-                if word_info:
-                    word, translation, weight = word_info
-                    bot.send_message(message.from_user.id, f"Перевод😉:\n{translation}", parse_mode='html')
-                    get_random_word_eng(user_id, last_info[1], message)
-                else:
-                    bot.send_message(message.from_user.id, f"Произошла ошибка😢, обратитесь к @lrawd3",
-                                     parse_mode='html')
-        else:
-            bot.send_message(message.from_user.id, f"Возникла ошибка\nПропиши /start",
-                             parse_mode='html')
-
-    if last_info[2] == "ru":
+    else:
         cursor.execute("""
                     SELECT word_id, word, weight
                     FROM Words
@@ -227,39 +166,33 @@ def on_user_response(message):
                 """, (last_info[0],))
         word_info = cursor.fetchone()
 
-        if word_info is not None:
-            cursor.execute("""
-                                        SELECT usage_weight
-                                        FROM UserWords
-                                        WHERE word_id = ? AND user_id = ?;
-                                    """, (word_info[0], user_id))
-            w = cursor.fetchone()
+    if word_info is not None:
+        cursor.execute("""
+                                SELECT usage_weight
+                                FROM UserWords
+                                WHERE word_id = ? AND user_id = ?;
+                            """, (word_info[0], user_id))
+        w = cursor.fetchone()[0]
 
-            if message.text == 'Знаю':
-                if word_info and w:
-                    word, translation, weight = word_info
-                    bot.send_message(message.from_user.id, f"Напоминаю🤓:\n{translation}", parse_mode='html')
-                    usage_weight = w[0]
-                    usage_weight /= 1.5
-                    cursor.execute("UPDATE UserWords SET usage_weight = ? WHERE user_id = ? AND word_id = ?",
-                                   (usage_weight, user_id, word_info[0]))
-                    conn.commit()
-                    get_random_word_ru(user_id, last_info[1], message)
-                else:
-                    bot.send_message(message.from_user.id, f"Произошла ошибка😢, обратитесь к @lrawd3",
-                                     parse_mode='html')
-            if message.text == 'Не знаю':
-                if word_info:
-                    word, translation, weight = word_info
-                    bot.send_message(message.from_user.id, f"Перевод😉:\n{translation}", parse_mode='html')
-                    get_random_word_ru(user_id, last_info[1], message)
-                else:
-                    bot.send_message(message.from_user.id, f"Произошла ошибка😢, обратитесь к @lrawd3",
-                                     parse_mode='html')
-        
-        else:
-            bot.send_message(message.from_user.id, f"Возникла ошибка\nПропиши /start",
-                             parse_mode='html')
+        if message.text == 'Знаю':
+            word, translation, weight = word_info
+            bot.send_message(message.from_user.id, f"Напоминаю🤓:\n{translation}", parse_mode='html')
+
+            cursor.execute("UPDATE UserWords SET usage_weight = ? WHERE user_id = ? AND word_id = ?",
+                           (w / 1.5, user_id, word_info[0]))
+            conn.commit()
+            if last_info[2] == "ru": process_text_to_speech(message, translation)
+
+            get_random_word(user_id, last_info[1], message)
+
+        if message.text == 'Не знаю':
+            word, translation, weight = word_info
+            bot.send_message(message.from_user.id, f"Перевод😉:\n{translation}", parse_mode='html')
+            if last_info[2] == "ru": process_text_to_speech(message, translation)
+            get_random_word(user_id, last_info[1], message)
+
+    else:
+        bot.send_message(message.from_user.id, f"Возникла ошибка\nПропиши /start", parse_mode='html')
 
 
 @bot.message_handler(content_types=["text"])
