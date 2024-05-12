@@ -47,7 +47,7 @@ def start(message):
     markup.add(but[10], but[11], but[12])
     markup.add(but[0])
 
-    bot.send_message(message.chat.id, "Выбери юнит", reply_markup=markup, parse_mode='html')
+    bot.send_message(message.chat.id, "Добро пожаловать в PolyEng! По кнопке ниже выбери Юнит по которому хочешь практиковаться. Для возварщения в начало напиши 'Меню'. Для дополнительной информации напиши /help", reply_markup=markup, parse_mode='html')
 
 @bot.message_handler(commands=['help'])
 def help(message):
