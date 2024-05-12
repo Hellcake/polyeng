@@ -12,6 +12,8 @@ bot = telebot.TeleBot(os.environ.get("TELEGRAM_BOT_API"))
 
 conn = sqlite3.connect('db/database.db', check_same_thread=False)
 cursor = conn.cursor()
+themes = ['All', 'Advert', 'Business', 'Design', 'Education', 'Personality', 'Language',
+          'Travel', 'Work', 'Crime', 'Arts and media', 'Trends', 'Engineering']
 
 
 def handle_command(message):
@@ -20,9 +22,9 @@ def handle_command(message):
     return result
 
 
-@bot.message_handler(func=lambda message: message.text in ['Меню'])
+@bot.message_handler(func=lambda message: message.text in ["Вернуться в меню"])
 def back(message):
-    if message.text == 'Меню':
+    if message.text == "Вернуться в меню":
         start(message)
 
 
@@ -36,8 +38,14 @@ def text_to_speech(text, language='en'):
 @bot.message_handler(commands=['start'])
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    but1 = types.KeyboardButton("test unit")
-    markup.add(but1)
+    but = []
+    for i in themes:
+        but.append(types.KeyboardButton(i))
+    markup.add(but[1], but[2], but[3])
+    markup.add(but[4], but[5], but[6])
+    markup.add(but[7], but[8], but[9])
+    markup.add(but[10], but[11], but[12])
+    markup.add(but[0])
 
     bot.send_message(message.chat.id, "Выбери юнит", reply_markup=markup, parse_mode='html')
 
@@ -52,14 +60,26 @@ def process_text_to_speech(message, text):
 
 def switch_case(argument):
     switch_dict = {
-        'test unit': 1
+        'All': 0,
+        'Advert': 1,
+        'Business': 2,
+        'Design': 3,
+        'Education': 4,
+        'Personality': 5,
+        'Language': 6,
+        'Travel': 7,
+        'Work': 8,
+        'Crime': 9,
+        'Arts and media': 10,
+        'Trends': 11,
+        'Engineering': 12
     }
 
     return switch_dict.get(argument, "Invalid case")
 
 
 @bot.message_handler(
-    func=lambda message: message.text in ['test unit'])
+    func=lambda message: message.text in themes)
 def choose_topic(message):
     user_id = message.from_user.id
     topic_name = message.text
@@ -86,7 +106,7 @@ def choose_topic(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     but1 = types.KeyboardButton('Квиз')
     but2 = types.KeyboardButton('Знаю / не знаю')
-    but3 = types.KeyboardButton('Меню')
+    but3 = types.KeyboardButton("Вернуться в меню")
     markup.add(but1, but2)
     markup.add(but3)
     bot.send_message(message.chat.id, 'Выбери режим', reply_markup=markup, parse_mode='html')
@@ -106,7 +126,7 @@ def choose_mode(message):
     but1 = types.KeyboardButton('C английского на русский')
     but2 = types.KeyboardButton('С русского на английский')
     markup.add(but1, but2)
-    bot.send_message(message.chat.id, "Выбери бля потом придумаю как нормально написать что выбери",
+    bot.send_message(message.chat.id, "Выбери язык",
                      reply_markup=markup, parse_mode='html')
 
 
@@ -121,20 +141,13 @@ def choose_language(message):
     conn.commit()
 
     cursor.execute("""
-                    SELECT mode
+                    SELECT mode, last_topic
                     FROM Users
                     WHERE user_id = ?;
                 """, (message.from_user.id,))
     current_mode = cursor.fetchone()
 
-    cursor.execute("""
-                            SELECT last_topic
-                            FROM Users
-                            WHERE user_id = ?;
-                        """, (message.from_user.id,))
-    current_topic = cursor.fetchone()
-
-    start_game(message, current_mode[0], lang, current_topic[0])
+    start_game(message, current_mode[0], lang, current_mode[1])
 
 
 def start_game(message, mode, lang, topic):
@@ -147,12 +160,20 @@ def start_game(message, mode, lang, topic):
 
 
 def get_phrase(message, topic_id, lang):
-    cursor.execute("""
-        SELECT Words.word,Words.translation, UserWords.usage_weight
-        FROM Words
-        JOIN UserWords ON Words.word_id = UserWords.word_id
-        WHERE Words.topic_id = ? AND UserWords.user_id = ?;
-    """, (topic_id, message.from_user.id,))
+    if topic_id == '0':
+        cursor.execute("""
+                SELECT Words.word,Words.translation, UserWords.usage_weight
+                FROM Words
+                JOIN UserWords ON Words.word_id = UserWords.word_id
+                WHERE UserWords.user_id = ?;
+            """, (message.from_user.id,))
+    else:
+        cursor.execute("""
+            SELECT Words.word,Words.translation, UserWords.usage_weight
+            FROM Words
+            JOIN UserWords ON Words.word_id = UserWords.word_id
+            WHERE Words.topic_id = ? AND UserWords.user_id = ?;
+        """, (topic_id, message.from_user.id,))
     words_with_weights = cursor.fetchall()
 
     if words_with_weights:
@@ -175,12 +196,14 @@ def quiz(message, topic_id, lang):
         options.append(cur)
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    button = []
     for _ in range(4):
         t = random.choice(options)
-        button = types.KeyboardButton(t)
+        button.append(types.KeyboardButton(t))
         options.remove(t)
-        markup.add(button)
-    markup.add('Меню')
+    markup.add(button[0], button[1])
+    markup.add(button[2], button[3])
+    markup.add("Вернуться в меню")
     bot.send_message(message.from_user.id, main_phrase[abs(flag - 1)], reply_markup=markup, parse_mode='html')
     cursor.execute("UPDATE Users SET last_word = ? WHERE user_id = ? AND last_topic = ?",
                    (main_phrase[abs(flag - 1)], message.from_user.id, topic_id))
@@ -188,12 +211,20 @@ def quiz(message, topic_id, lang):
 
 
 def get_random_word(user_id, topic_id, message):
-    cursor.execute("""
-        SELECT Words.word,Words.translation, UserWords.usage_weight
-        FROM Words
-        JOIN UserWords ON Words.word_id = UserWords.word_id
-        WHERE Words.topic_id = ? AND UserWords.user_id = ?;
-    """, (topic_id, user_id,))
+    if topic_id == '0':
+        cursor.execute("""
+                SELECT Words.word,Words.translation, UserWords.usage_weight
+                FROM Words
+                JOIN UserWords ON Words.word_id = UserWords.word_id
+                WHERE UserWords.user_id = ?;
+            """, (user_id,))
+    else:
+        cursor.execute("""
+            SELECT Words.word,Words.translation, UserWords.usage_weight
+            FROM Words
+            JOIN UserWords ON Words.word_id = UserWords.word_id
+            WHERE Words.topic_id = ? AND UserWords.user_id = ?;
+        """, (topic_id, user_id,))
 
     words_with_weights = cursor.fetchall()
     cursor.execute("""
@@ -211,7 +242,7 @@ def get_random_word(user_id, topic_id, message):
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         but1 = types.KeyboardButton("Знаю")
         but2 = types.KeyboardButton("Не знаю")
-        but3 = types.KeyboardButton("Меню")
+        but3 = types.KeyboardButton("Вернуться в меню")
         markup.add(but1, but2)
         markup.add(but3)
         bot.send_message(message.from_user.id, selected_word, reply_markup=markup, parse_mode='html')
