@@ -49,6 +49,9 @@ def start(message):
 
     bot.send_message(message.chat.id, "Выбери юнит", reply_markup=markup, parse_mode='html')
 
+@bot.message_handler(commands=['help'])
+def help(message):
+        bot.send_message(message.chat.id, "Привет! На данный момент доступно два режима: Квиз и Знаю / не знаю. Знаю / не знаю - режим заучивания, бот присылает слова по заданному юниту в выбранном режиме: на русском или английском. Квиз - режим проверки своих знаний в режиме викторины, также доступен на русском и английском.",  parse_mode='html')
 
 def process_text_to_speech(message, text):
     audio_filename = text_to_speech(text)
